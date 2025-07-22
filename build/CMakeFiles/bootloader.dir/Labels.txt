@@ -1,0 +1,13 @@
+# Target labels
+ bootloader
+# Source files and their labels
+/home/dhall/dev/pio/10_lvgl_demo_v9/build/CMakeFiles/bootloader
+/home/dhall/dev/pio/10_lvgl_demo_v9/build/CMakeFiles/bootloader.rule
+/home/dhall/dev/pio/10_lvgl_demo_v9/build/CMakeFiles/bootloader-complete.rule
+/home/dhall/dev/pio/10_lvgl_demo_v9/build/bootloader-prefix/src/bootloader-stamp/bootloader-build.rule
+/home/dhall/dev/pio/10_lvgl_demo_v9/build/bootloader-prefix/src/bootloader-stamp/bootloader-configure.rule
+/home/dhall/dev/pio/10_lvgl_demo_v9/build/bootloader-prefix/src/bootloader-stamp/bootloader-download.rule
+/home/dhall/dev/pio/10_lvgl_demo_v9/build/bootloader-prefix/src/bootloader-stamp/bootloader-install.rule
+/home/dhall/dev/pio/10_lvgl_demo_v9/build/bootloader-prefix/src/bootloader-stamp/bootloader-mkdir.rule
+/home/dhall/dev/pio/10_lvgl_demo_v9/build/bootloader-prefix/src/bootloader-stamp/bootloader-patch.rule
+/home/dhall/dev/pio/10_lvgl_demo_v9/build/bootloader-prefix/src/bootloader-stamp/bootloader-update.rule
