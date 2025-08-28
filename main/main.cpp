@@ -8,14 +8,18 @@
 #include "esp_log.h"
 #include "esp_memory_utils.h"
 #include "freertos/FreeRTOS.h"
+#include "freertos/projdefs.h"
 #include "freertos/task.h"
 #include "lv_demos.h"
 #include "lvgl.h"
 #include "misc/lv_color.h"
 #include "nvs.h"
 #include "nvs_flash.h"
+#include "driver/twai.h"
+#include "driver/gpio.h"
 
 #include "MainDisplay.hpp"
+#include "CanConnect.hpp"
 
 static void lvgl_full_overlay_cb(lv_event_t *event) {
     lv_event_code_t code = lv_event_get_code(event);
@@ -35,12 +39,14 @@ static void lvgl_full_overlay_cb(lv_event_t *event) {
 }
 
 static void touchToHideObj(lv_obj_t *dashboard) {
+    bsp_display_lock(0);
     lv_obj_t *invis_overlay = lv_obj_create(lv_scr_act());
     lv_obj_remove_style_all(invis_overlay);
     lv_obj_set_size(invis_overlay, LV_PCT(100), LV_PCT(100));
     lv_obj_center(invis_overlay);
     lv_obj_set_style_opa(invis_overlay, LV_OPA_TRANSP, 0);
     lv_obj_add_event_cb(invis_overlay, lvgl_full_overlay_cb, LV_EVENT_ALL, dashboard);
+    bsp_display_unlock();
 }
 
 static void lvglInit() {
@@ -63,8 +69,33 @@ static void lvglInit() {
 extern "C" void app_main(void) {
     lvglInit();
 
+    // CanConnect CAN;
+    twai_message_t can_frame;
+    static uint16_t rpm_value = 4000;
+    static uint8_t speed_value = 74;
+    uint8_t fuel_value = 0;
+    uint16_t temp_value = 0;
+
     bsp_display_lock(0);
-    MainDisplay dashboard;
+    static MainDisplay dashboard;
+
+    // if (!CAN.ReceiveFrame(can_frame, pdMS_TO_TICKS(3000))) {
+    //     ESP_LOGE("FATAL", "Not receiving any CAN Frames");
+    // }
+    // rpm_value = CanConnect::HandleRPM(can_frame);
+    // speed_value = CanConnect::HandleSpeed(can_frame);
+
+    dashboard.RpmArc();
+    dashboard.SetRPMValue(rpm_value);
+
+    dashboard.SpeedArc();
+    dashboard.SetRPMValue(speed_value);
+
+    dashboard.FuelArc();
+
+    dashboard.TempArc();
+
     touchToHideObj(dashboard.getMainDisplay());
+    // dashboard.runDebugAnimation();
     bsp_display_unlock();
 }
