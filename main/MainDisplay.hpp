@@ -1,14 +1,15 @@
 #pragma once
-#include "bsp/esp32_p4_wifi6_touch_lcd_xc.h"
+#include "core/lv_obj_pos.h"
+#include "misc/lv_color.h"
+#include "widgets/label/lv_label.h"
+#include <string>
 #ifndef MAINDISPLAY_HPP
 #define MAINDISPLAY_HPP
 #include <cstdint>
-#include <string>
 #include "esp_log.h"
 #include "bsp/display.h"
 #include "bsp/esp-bsp.h"
 #include "bsp_board_extra.h"
-#include "core/lv_obj.h"
 #include "display/lv_display.h"
 #include "gaugeMath.hpp"
 #include "hexCodes.hpp"
@@ -19,11 +20,16 @@ LV_IMG_DECLARE(MiniDash_v1_2);
 
 class MainDisplay : ParentDisplay {
   private:
-    lv_obj_t *dash_bg = lv_img_create(parentDisplay);
-    lv_obj_t *rpmArc = lv_arc_create(dash_bg);
-    lv_obj_t *speedArc = lv_arc_create(dash_bg);
-    lv_obj_t *fuelArc = lv_arc_create(dash_bg);
-    lv_obj_t *tempArc = lv_arc_create(dash_bg);
+    lv_obj_t *dash_bg;
+    lv_obj_t *rpmArc{};
+    lv_obj_t *rpmLabel{};
+    lv_obj_t *speedArc{};
+    lv_obj_t *speedLabel{};
+    lv_obj_t *fuelArc{};
+    lv_obj_t *fuelLabel{};
+    lv_obj_t *tempArc{};
+    lv_obj_t *tempLabel{};
+    lv_obj_t *invis_overlay{};
 
     enum class ArcType : uint8_t {
         uNULL = 0,
@@ -31,7 +37,6 @@ class MainDisplay : ParentDisplay {
         SPEED = 2,
         TEMP = 3,
         FUEL = 4
-
     };
 
     struct arc_config {
@@ -57,7 +62,11 @@ class MainDisplay : ParentDisplay {
         lv_arc_set_value(arc, value);
     }
 
-    static auto debugArcAnim(lv_obj_t *arc) -> void {
+    static auto arcAnim(lv_obj_t *arc, bool startupEnable) -> void {
+        if (!arc) {
+            ESP_LOGE("FATAL", "null arc was passed into arcAnim function");
+            return;
+        }
         lv_anim_t anim;
         lv_anim_init(&anim);
         lv_anim_set_var(&anim, arc);
@@ -67,7 +76,11 @@ class MainDisplay : ParentDisplay {
         lv_anim_set_duration(
             &anim, ANIM_DUR); // Set duration of the animation, this is for some
                               // reason linked to the clockwise rotation
-        lv_anim_set_repeat_count(&anim, LV_ANIM_REPEAT_INFINITE);
+        if (startupEnable) {
+            lv_anim_set_repeat_count(&anim, 0);
+        } else {
+            lv_anim_set_repeat_count(&anim, LV_ANIM_REPEAT_INFINITE);
+        }
         lv_anim_set_playback_duration(
             &anim, ANIM_DUR); // Set duration of the animation, this is for some
                               // reason linked to the counter-clockwise rotation
@@ -126,27 +139,32 @@ class MainDisplay : ParentDisplay {
     static auto labelSetup(lv_obj_t *label, label_config *config) -> void {
         lv_obj_align(label, LV_ALIGN_CENTER, LABEL_OFFSET_X, config->label_offset);
 
+        lv_label_set_text(label, "");
+
         lv_obj_set_style_text_color(label, lv_color_hex(0xFFFFFF), 0);
-    }
-
-    auto ParentSetup() -> void {
-        lv_obj_set_size(parentDisplay, 720, 720);
-
-        lv_obj_remove_flag(parentDisplay, LV_OBJ_FLAG_SCROLLABLE);
-
-        lv_obj_set_style_bg_opa(parentDisplay, LV_OPA_TRANSP, 0);
     }
 
     auto ImageSetup() -> void {
         lv_img_set_src(dash_bg, &MiniDash_v1_2);
-
         lv_obj_center(dash_bg);
-
-        lv_img_set_zoom(dash_bg, LV_ZOOM_NONE);
+    }
+    auto InvisOverlaySetup() -> void {
+        lv_obj_remove_style_all(invis_overlay);
+        lv_obj_set_size(invis_overlay, LV_PCT(100), LV_PCT(100));
+        lv_obj_center(invis_overlay);
+        lv_obj_set_style_opa(invis_overlay, LV_OPA_TRANSP, 0);
     }
 
   public:
-    auto RpmArc() -> void {
+    MainDisplay() : dash_bg(lv_img_create(parentDisplay)),
+                    invis_overlay(lv_obj_create(lv_scr_act())) {
+        InvisOverlaySetup();
+        ImageSetup();
+    }
+
+    auto SetupRpmArc() -> void {
+        rpmArc = lv_arc_create(dash_bg);
+        rpmLabel = lv_label_create(dash_bg);
         arc_config arc_config;
         arc_config.identifier = ArcType::RPM;
         arc_config.rotation = RPM_ARC_ROTATION;
@@ -156,35 +174,38 @@ class MainDisplay : ParentDisplay {
         arc_config.max = RPM_ARC_MAX;
         arc_config.ticks = RPM_TICKS;
 
-        lv_obj_t *label = lv_label_create(dash_bg);
         label_config label_config;
         label_config.prefix = "RPM: ";
         label_config.label_offset = RPM_LABEL_OFFSET_Y;
 
         arcSetup(rpmArc, &arc_config);
-        labelSetup(label, &label_config);
+        labelSetup(rpmLabel, &label_config);
     }
 
-    auto SpeedArc() -> void {
+    auto SetupSpeedArc() -> void {
+        speedArc = lv_arc_create(dash_bg);
+        speedLabel = lv_label_create(dash_bg);
         arc_config arc_config;
         arc_config.identifier = ArcType::SPEED;
-        arc_config.rotation = SPEEDO_ARC_ROTATION;
-        arc_config.size = SPEEDO_ARC_SIZE;
-        arc_config.angle = SPEEDO_ARC_ANGLE;
+        arc_config.rotation = SPEED_ARC_ROTATION;
+        arc_config.size = SPEED_ARC_SIZE;
+        arc_config.angle = SPEED_ARC_ANGLE;
         arc_config.min = SPEED_ARC_MIN;
         arc_config.max = SPEED_ARC_MAX;
         arc_config.ticks = SPEED_TICKS;
 
-        lv_obj_t *label = lv_label_create(dash_bg);
+        speedLabel = lv_label_create(dash_bg);
         label_config label_config;
         label_config.prefix = "SPEED: ";
         label_config.label_offset = SPEEDO_LABEL_OFFSET_Y;
 
         arcSetup(speedArc, &arc_config);
-        labelSetup(label, &label_config);
+        labelSetup(speedLabel, &label_config);
     }
 
-    auto FuelArc() -> void {
+    auto SetupFuelArc() -> void {
+        fuelArc = lv_arc_create(dash_bg);
+        fuelLabel = lv_label_create(dash_bg);
         arc_config arc_config;
         arc_config.identifier = ArcType::FUEL;
         arc_config.rotation = FUEL_ARC_ROTATION;
@@ -194,57 +215,81 @@ class MainDisplay : ParentDisplay {
         arc_config.max = FUEL_ARC_MAX;
         arc_config.ticks = FUEL_TICKS;
 
-        lv_obj_t *label = lv_label_create(dash_bg);
+        fuelLabel = lv_label_create(dash_bg);
         label_config label_config;
         label_config.label_offset = FUEL_LABEL_OFFSET_Y;
         label_config.prefix = "FUEL: ";
 
         arcSetup(fuelArc, &arc_config);
-        labelSetup(label, &label_config);
+        labelSetup(fuelLabel, &label_config);
     }
 
-    auto TempArc() -> void {
+    auto SetupTempArc() -> void {
+        tempArc = lv_arc_create(dash_bg);
+        tempLabel = lv_label_create(dash_bg);
         arc_config arc_config;
         arc_config.identifier = ArcType::TEMP;
         arc_config.rotation = TEMP_ARC_ROTATION;
         arc_config.size = TEMP_ARC_SIZE;
         arc_config.angle = TEMP_ARC_ANGLE;
+        arc_config.min = TEMP_ARC_MIN;
+        arc_config.max = TEMP_ARC_MAX;
         arc_config.ticks = TEMP_TICKS;
 
-        lv_obj_t *label = lv_label_create(dash_bg);
+        tempLabel = lv_label_create(dash_bg);
         label_config label_config;
         label_config.label_offset = TEMP_LABEL_OFFSET_Y;
         label_config.prefix = "TEMP: ";
 
         arcSetup(tempArc, &arc_config);
-        labelSetup(label, &label_config);
+        labelSetup(tempLabel, &label_config);
     }
 
     auto SetRPMValue(uint16_t value) -> void {
+        if (!rpmArc) {
+            ESP_LOGE("FATAL", "rpmArc is null");
+            return;
+        }
         lv_arc_set_value(rpmArc, value);
-    }
-    auto SetSpeedValue(uint8_t value) -> void {
-        lv_arc_set_value(speedArc, value);
-    }
-    auto SetTempValue(uint16_t value) -> void {
-        lv_arc_set_value(tempArc, value);
-    }
-    auto SetFuelValue(uint8_t value) -> void {
-        lv_arc_set_value(fuelArc, value);
+        lv_label_set_text_fmt(rpmLabel, "RPM: %i", value);
     }
 
-    MainDisplay() {
-        ParentSetup();
-        ImageSetup();
+    auto SetSpeedValue(uint8_t value) -> void {
+        if (!speedArc) {
+            ESP_LOGE("FATAL", "speedArc is null");
+            return;
+        }
+        lv_arc_set_value(speedArc, value);
+        lv_label_set_text_fmt(speedLabel, "SPEED: %i", value);
     }
-    auto getMainDisplay() -> lv_obj_t * {
-        return parentDisplay;
+
+    auto SetFuelValue(uint8_t value) -> void {
+        if (!fuelArc) {
+            ESP_LOGE("FATAL", "fuelArc is null");
+            return;
+        }
+        lv_arc_set_value(fuelArc, value);
+        lv_label_set_text_fmt(fuelLabel, "FUEL: %i", value);
     }
-    auto runDebugAnimation() -> void {
-        debugArcAnim(rpmArc);
-        debugArcAnim(speedArc);
-        debugArcAnim(fuelArc);
-        debugArcAnim(tempArc);
+
+    auto SetTempValue(uint16_t value) -> void {
+        if (!tempArc) {
+            ESP_LOGE("FATAL", "tempArc is null");
+            return;
+        }
+        lv_arc_set_value(tempArc, value);
+        lv_label_set_text_fmt(tempLabel, "TEMP: %i", value);
+    }
+
+    void HideOnTouch() {
+        lv_obj_add_event_cb(invis_overlay, hideObjectCallback, LV_EVENT_ALL, parentDisplay);
+    }
+
+    auto RunArcAnimation() -> void {
+        arcAnim(rpmArc, true);
+        arcAnim(speedArc, true);
+        arcAnim(fuelArc, true);
+        arcAnim(tempArc, true);
     }
 };
 

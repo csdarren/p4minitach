@@ -1,5 +1,6 @@
 #include "bsp/display.h"
 #include "bsp/esp-bsp.h"
+#include "bsp/esp32_p4_wifi6_touch_lcd_xc.h"
 #include "bsp_board_extra.h"
 #include "core/lv_obj.h"
 #include "display/lv_display.h"
@@ -21,34 +22,6 @@
 #include "MainDisplay.hpp"
 #include "CanConnect.hpp"
 
-static void lvgl_full_overlay_cb(lv_event_t *event) {
-    lv_event_code_t code = lv_event_get_code(event);
-
-    auto *dashboard = static_cast<lv_obj_t *>(lv_event_get_user_data(event));
-    if (code == LV_EVENT_CLICKED) {
-        ESP_LOGI("CLICKED EVENT", "Hiding Object");
-        bool hidden = lv_obj_has_flag(dashboard, LV_OBJ_FLAG_HIDDEN);
-        if (hidden) {
-            lv_obj_remove_flag(dashboard, LV_OBJ_FLAG_HIDDEN);
-            bsp_display_backlight_on();
-        } else {
-            lv_obj_add_flag(dashboard, LV_OBJ_FLAG_HIDDEN);
-            bsp_display_backlight_off();
-        }
-    }
-}
-
-static void touchToHideObj(lv_obj_t *dashboard) {
-    bsp_display_lock(0);
-    lv_obj_t *invis_overlay = lv_obj_create(lv_scr_act());
-    lv_obj_remove_style_all(invis_overlay);
-    lv_obj_set_size(invis_overlay, LV_PCT(100), LV_PCT(100));
-    lv_obj_center(invis_overlay);
-    lv_obj_set_style_opa(invis_overlay, LV_OPA_TRANSP, 0);
-    lv_obj_add_event_cb(invis_overlay, lvgl_full_overlay_cb, LV_EVENT_ALL, dashboard);
-    bsp_display_unlock();
-}
-
 static void lvglInit() {
     bsp_display_cfg_t cfg = {.lvgl_port_cfg = ESP_LVGL_PORT_INIT_CONFIG(),
                              .buffer_size = BSP_LCD_DRAW_BUFF_SIZE,
@@ -69,33 +42,49 @@ static void lvglInit() {
 extern "C" void app_main(void) {
     lvglInit();
 
-    // CanConnect CAN;
-    twai_message_t can_frame;
-    static uint16_t rpm_value = 4000;
-    static uint8_t speed_value = 74;
-    uint8_t fuel_value = 0;
-    uint16_t temp_value = 0;
+    CanConnect CAN;
+    static twai_message_t can_frame;
+    static uint16_t rpm_value = 3000;
+    static uint8_t speed_value = 69;
+    static uint8_t fuel_value = 75;
+    static uint16_t temp_value = 103;
 
     bsp_display_lock(0);
-    static MainDisplay dashboard;
-
-    // if (!CAN.ReceiveFrame(can_frame, pdMS_TO_TICKS(3000))) {
-    //     ESP_LOGE("FATAL", "Not receiving any CAN Frames");
-    // }
-    // rpm_value = CanConnect::HandleRPM(can_frame);
-    // speed_value = CanConnect::HandleSpeed(can_frame);
-
-    dashboard.RpmArc();
-    dashboard.SetRPMValue(rpm_value);
-
-    dashboard.SpeedArc();
-    dashboard.SetRPMValue(speed_value);
-
-    dashboard.FuelArc();
-
-    dashboard.TempArc();
-
-    touchToHideObj(dashboard.getMainDisplay());
-    // dashboard.runDebugAnimation();
+    MainDisplay dashboard;
+    dashboard.SetupRpmArc();
+    dashboard.SetupSpeedArc();
+    dashboard.SetupFuelArc();
+    dashboard.SetupTempArc();
+    dashboard.RunArcAnimation();
     bsp_display_unlock();
+
+    while (true) {
+        bsp_display_lock(0);
+
+        dashboard.HideOnTouch();
+        dashboard.SetRPMValue(rpm_value);
+        dashboard.SetSpeedValue(speed_value);
+        dashboard.SetFuelValue(fuel_value);
+        dashboard.SetTempValue(temp_value);
+
+        bsp_display_unlock();
+
+        if (CAN.ReceiveFrame(can_frame) != ESP_OK) {
+            ESP_LOGE("FATAL", "Not receiving any CAN Data");
+            continue;
+        }
+
+        if (auto val = CanConnect::HandleRPM(can_frame)) {
+            rpm_value = val;
+        }
+        if (auto value = CanConnect::HandleSPD(can_frame)) {
+            speed_value = value;
+        }
+        if (auto value = CanConnect::HandleFUEL(can_frame)) {
+            fuel_value = value;
+        }
+        if (auto value = CanConnect::HandleTEMP(can_frame)) {
+            temp_value = value;
+        }
+    }
 }

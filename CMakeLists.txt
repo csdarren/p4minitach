@@ -9,4 +9,4 @@ set(EXTRA_COMPONENT_DIRS
     )
 
 add_compile_options(-Wno-format)
-project(lvgl_demo_v9)
+project(p4minitach)
