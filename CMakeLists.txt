@@ -5,10 +5,19 @@ cmake_minimum_required(VERSION 3.5)
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
 
 set(EXTRA_COMPONENT_DIRS
-    "${CMAKE_SOURCE_DIR}/src"
     ./components/bsp_extra
     )
-set()
+
+project(p4minitach C CXX)
+
+### This went into main/ before, moved it here so I could have idf_component.yml in root instead of main/
+idf_component_get_property(LVGL_LIB lvgl__lvgl COMPONENT_LIB)
+if (LVGL_LIB)
+    target_compile_options(
+    ${LVGL_LIB} 
+    PRIVATE
+        -DLV_LVGL_H_INCLUDE_SIMPLE)
+endif()
+###
 
 add_compile_options(-Wno-format)
-project(p4minitach)

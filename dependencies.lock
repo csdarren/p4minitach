@@ -112,12 +112,12 @@ dependencies:
       type: idf
     version: 5.5.0
   lvgl/lvgl:
-    component_hash: 2409fdc84e9766d2a18afd84b051aef3f838348136cdb1c10ac2e8bcdb012bf6
+    component_hash: b702d642e03e95928046d5c6726558e6444e112420c77efa5fdb6650b0a13c5d
     dependencies: []
     source:
-      registry_url: https://components.espressif.com/
+      registry_url: https://components.espressif.com
       type: service
-    version: 9.2.0
+    version: 9.3.0
   waveshare/esp32_p4_wifi6_touch_lcd_xc:
     component_hash: 31dd84a0f360c38fe7f8422ebe1f505353db6f34ee1573b2b5332c3ba3427960
     dependencies:
@@ -154,8 +154,7 @@ direct_dependencies:
 - chmorgan/esp-audio-player
 - chmorgan/esp-file-iterator
 - idf
-- lvgl/lvgl
 - waveshare/esp32_p4_wifi6_touch_lcd_xc
-manifest_hash: 1cf597b258b4ec3a7f041f0e9a896936390998f6d27e244e35c32b691bed6d81
+manifest_hash: caab05afa174afdf7967965497f893fcd7bf909798147d18430650ede58e718f
 target: esp32p4
 version: 2.0.0
