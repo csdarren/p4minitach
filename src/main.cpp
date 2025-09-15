@@ -69,8 +69,8 @@ extern "C" void app_main(void) {
 
         bsp_display_unlock();
 
-        if (CAN.ReceiveFrame(can_frame) != ESP_OK) {
-            ESP_LOGE("FATAL", "Not receiving any CAN Data");
+        if (esp_err_t error = CAN.ReceiveFrame(can_frame) != ESP_OK) {
+            ESP_LOGE("FATAL", "Not receiving any CAN Data, %s", error);
             continue;
         }
 
