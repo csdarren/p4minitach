@@ -32,23 +32,23 @@ class CanConnect {
         twai_filter_config_t twai_filter = TWAI_FILTER_CONFIG_ACCEPT_ALL();
 
         if (esp_err_t err = twai_driver_install_v2(&twai0, &twai_timing, &twai_filter, &h0) != ESP_OK) {
-            ESP_LOGE("FATAL", "Failed to install twai driver for handle 0 (receive CAN) ERR: %s", esp_err_to_name(err));
+            ESP_LOGE("CAN FATAL", "Failed to install twai driver for handle 0 (receive CAN) ERR: %s", esp_err_to_name(err));
         }
         if (esp_err_t err = twai_start_v2(h0) != ESP_OK) {
-            ESP_LOGE("FATAL", "Failed to start twai driver for handle 0 (receive CAN) ERR: %s", esp_err_to_name(err));
+            ESP_LOGE("CAN FATAL", "Failed to start twai driver for handle 0 (receive CAN) ERR: %s", esp_err_to_name(err));
         };
 
         if (esp_err_t err = twai_driver_install_v2(&twai1, &twai_timing, &twai_filter, &h1) != ESP_OK) {
-            ESP_LOGE("FATAL", "Failed to install twai driver for handle 1 (transmit CAN) ERR: %s", esp_err_to_name(err));
+            ESP_LOGE("CAN FATAL", "Failed to install twai driver for handle 1 (transmit CAN) ERR: %s", esp_err_to_name(err));
         }
         if (esp_err_t err = twai_start_v2(h1) != ESP_OK) {
-            ESP_LOGE("FATAL", "Failed to start twai driver for handle 1 (transmit CAN) ERR: %s", esp_err_to_name(err));
+            ESP_LOGE("CAN FATAL", "Failed to start twai driver for handle 1 (transmit CAN) ERR: %s", esp_err_to_name(err));
         };
     }
 
     auto TransmitFrame(const twai_message_t &can_frame) -> void {
         if (esp_err_t err = twai_transmit_v2(h1, &can_frame, pdMS_TO_TICKS(timeout_in_ms)) != ESP_OK) {
-            ESP_LOGE("FATAL", "Not transmitting any CAN Data, %s", esp_err_to_name(err));
+            ESP_LOGE("CAN FATAL", "Not transmitting any CAN Data, %s", esp_err_to_name(err));
         }
     }
 
@@ -58,7 +58,7 @@ class CanConnect {
     }
     auto ReceiveFrame() -> bool {
         if (esp_err_t err = twai_receive_v2(h0, &can_frame, pdMS_TO_TICKS(timeout_in_ms)) != ESP_OK) {
-            ESP_LOGE("FATAL", "Not receiving any CAN Data, %s", esp_err_to_name(err));
+            ESP_LOGE("CAN FATAL", "Not receiving any CAN Data, %s", esp_err_to_name(err));
             return false;
         }
         return true;

@@ -1,4 +1,6 @@
 #include "bsp/esp32_p4_wifi6_touch_lcd_xc.h"
+#include "freertos/idf_additions.h"
+#include "freertos/projdefs.h"
 #include "lvgl.h"
 
 #include "MainDisplay.hpp"
@@ -52,14 +54,15 @@ extern "C" void can_task(void * /*task_param*/) {
         }
         xQueueOverwrite(can_queue, &can_data);
 
-        vTaskDelay(pdMS_TO_TICKS(1)); // 10ms delay keeps scheduler happy
+        //Every x ms the queue is overwritten with new data
+        vTaskDelay(pdMS_TO_TICKS(5)); // x ms delay keeps scheduler happy
     }
 }
 
 extern "C" void ui_task(void * /*task_param*/) {
     can_data_t can_data;
-    lvglInit();
 
+    lvglInit();
     bsp_display_lock(1);
     MainDisplay dashboard;
     dashboard.SetupRpmArc();
@@ -71,19 +74,26 @@ extern "C" void ui_task(void * /*task_param*/) {
 
     while (true) {
         // dashboard.HideOnTouch();
-        xQueueReceive(can_queue, &can_data, portMAX_DELAY);
-        bsp_display_lock(0);
+        if (xQueueReceive(can_queue, &can_data, pdMS_TO_TICKS(50)) == pdTRUE) {
+            bsp_display_lock(0);
 
-        dashboard.SetRPMValue(can_data.rpm_value);
-        dashboard.SetSpeedValue(can_data.speed_value);
-        dashboard.SetFuelValue(can_data.fuel_value);
-        dashboard.SetTempValue(can_data.temp_value);
+            dashboard.SetRPMValue(can_data.rpm_value);
+            dashboard.SetSpeedValue(can_data.speed_value);
+            dashboard.SetFuelValue(can_data.fuel_value);
+            dashboard.SetTempValue(can_data.temp_value);
 
-        bsp_display_unlock();
+            bsp_display_unlock();
+        } else {
+            ESP_LOGE("UI FATAL", "Not receiving data from the Queue");
+            vTaskDelay(pdMS_TO_TICKS(10));
+            continue;
+        }
+        vTaskDelay(pdMS_TO_TICKS(16));
     }
 }
 
 extern "C" void app_main(void) {
+    can_queue = xQueueCreate(1, sizeof(can_data_t));
     xTaskCreatePinnedToCore(can_task, "CAN TASK", 4096, nullptr, 5, nullptr, 0);
     xTaskCreatePinnedToCore(ui_task, "UI/LVGL TASK", 8192, nullptr, 4, nullptr, 1);
 }
