@@ -189,4 +189,3 @@ cython_debug/
 
 # ESP32 Stuff
 /managed_components
-/components
