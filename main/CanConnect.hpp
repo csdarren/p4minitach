@@ -4,6 +4,7 @@
 
 #include "driver/twai.h"
 #include "esp_log.h"
+#include <cmath>
 
 #define TORQ3 0x0AA
 #define SPEED 0x1A0
@@ -15,6 +16,26 @@
 #define RX1 GPIO_NUM_27
 #define TX1 GPIO_NUM_47
 
+using can_data_t = struct {
+    uint16_t rpm_value;
+    uint8_t speed_value;
+    uint8_t fuel_value;
+    uint16_t temp_value;
+};
+
+// These operator definitions allow direct comparison of entire struct
+inline auto operator==(const can_data_t &lhs, const can_data_t &rhs) -> bool {
+    return lhs.rpm_value == rhs.rpm_value &&
+           lhs.speed_value == rhs.speed_value &&
+           lhs.fuel_value == rhs.fuel_value &&
+           lhs.temp_value == rhs.temp_value;
+}
+
+inline auto operator!=(const can_data_t &lhs, const can_data_t &rhs) -> bool {
+    return !(lhs == rhs);
+}
+//////////////////
+
 class CanConnect {
   private:
     twai_handle_t h0{};
@@ -22,14 +43,12 @@ class CanConnect {
     twai_message_t can_frame{};
     static constexpr TickType_t timeout_in_ms = 3000;
 
-    auto TwaiConfig() -> void {
-        twai_general_config_t twai0 = TWAI_GENERAL_CONFIG_DEFAULT(TX0, RX0, TWAI_MODE_NORMAL);
-        twai0.controller_id = 0;
-        twai_general_config_t twai1 = TWAI_GENERAL_CONFIG_DEFAULT(TX1, RX1, TWAI_MODE_NORMAL);
-        twai1.controller_id = 1;
-
+    auto TwaiConfig(bool transmit) -> void {
         twai_timing_config_t twai_timing = TWAI_TIMING_CONFIG_500KBITS();
         twai_filter_config_t twai_filter = TWAI_FILTER_CONFIG_ACCEPT_ALL();
+
+        twai_general_config_t twai0 = TWAI_GENERAL_CONFIG_DEFAULT(TX0, RX0, TWAI_MODE_NORMAL);
+        twai0.controller_id = 0;
 
         if (esp_err_t err = twai_driver_install_v2(&twai0, &twai_timing, &twai_filter, &h0) != ESP_OK) {
             ESP_LOGE("CAN FATAL", "Failed to install twai driver for handle 0 (receive CAN) ERR: %s", esp_err_to_name(err));
@@ -38,11 +57,15 @@ class CanConnect {
             ESP_LOGE("CAN FATAL", "Failed to start twai driver for handle 0 (receive CAN) ERR: %s", esp_err_to_name(err));
         };
 
-        if (esp_err_t err = twai_driver_install_v2(&twai1, &twai_timing, &twai_filter, &h1) != ESP_OK) {
-            ESP_LOGE("CAN FATAL", "Failed to install twai driver for handle 1 (transmit CAN) ERR: %s", esp_err_to_name(err));
-        }
-        if (esp_err_t err = twai_start_v2(h1) != ESP_OK) {
-            ESP_LOGE("CAN FATAL", "Failed to start twai driver for handle 1 (transmit CAN) ERR: %s", esp_err_to_name(err));
+        if (transmit) {
+            twai_general_config_t twai1 = TWAI_GENERAL_CONFIG_DEFAULT(TX1, RX1, TWAI_MODE_NORMAL);
+            twai1.controller_id = 1;
+            if (esp_err_t err = twai_driver_install_v2(&twai1, &twai_timing, &twai_filter, &h1) != ESP_OK) {
+                ESP_LOGE("CAN FATAL", "Failed to install twai driver for handle 1 (transmit CAN) ERR: %s", esp_err_to_name(err));
+            }
+            if (esp_err_t err = twai_start_v2(h1) != ESP_OK) {
+                ESP_LOGE("CAN FATAL", "Failed to start twai driver for handle 1 (transmit CAN) ERR: %s", esp_err_to_name(err));
+            }
         };
     }
 
@@ -53,8 +76,8 @@ class CanConnect {
     }
 
   public:
-    CanConnect() {
-        TwaiConfig();
+    CanConnect(bool transmit = false) {
+        TwaiConfig(transmit);
     }
     auto ReceiveFrame() -> bool {
         if (esp_err_t err = twai_receive_v2(h0, &can_frame, pdMS_TO_TICKS(timeout_in_ms)) != ESP_OK) {
@@ -70,11 +93,11 @@ class CanConnect {
         }
         uint16_t rpm_value = 0;
         uint8_t modifier = 255;
-        uint8_t scale = 4;
-        uint8_t increment_value = can_frame.data[6];
+        float scale = 0.25;
+        uint8_t increment_value = can_frame.data[5];
         uint16_t raw_value = increment_value * modifier;
-        uint8_t active_raw_value = can_frame.data[5];
-        rpm_value = ((raw_value / 2) / scale) + active_raw_value;
+        uint8_t active_raw_value = can_frame.data[4];
+        rpm_value = std::round(((static_cast<float>(raw_value) / 2) * scale) + static_cast<float>(active_raw_value));
 
         if (transmit) {
             TransmitFrame(can_frame);
@@ -87,11 +110,13 @@ class CanConnect {
         }
         uint8_t speed_value = 0;
         uint8_t modifier = 255;
+        float scale = 0.621;
+        uint32_t scaled = 0;
         uint8_t increment_value = can_frame.data[1] & 0x0F; // extracts only the right most hex digit, AKA first 4 bits
         uint16_t raw_value = increment_value * modifier;
         uint8_t active_raw_value = can_frame.data[0];
 
-        uint32_t scaled = (raw_value * 621 + 5000) / 1000;
+        scaled = std::round(static_cast<float>(raw_value) * scale);
         speed_value = scaled + active_raw_value;
 
         if (transmit) {

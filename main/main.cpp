@@ -1,20 +1,26 @@
 #include "bsp/esp32_p4_wifi6_touch_lcd_xc.h"
-#include "freertos/idf_additions.h"
-#include "freertos/projdefs.h"
 #include "lvgl.h"
 
 #include "MainDisplay.hpp"
 #include "CanConnect.hpp"
 
 static void lvglInit() {
-    bsp_display_cfg_t cfg = {.lvgl_port_cfg = ESP_LVGL_PORT_INIT_CONFIG(),
-                             .buffer_size = BSP_LCD_DRAW_BUFF_SIZE,
-                             .double_buffer = BSP_LCD_DRAW_BUFF_DOUBLE,
-                             .flags = {
-                                 .buff_dma = true,
-                                 .buff_spiram = false,
-                                 .sw_rotate = false,
-                             }};
+    lvgl_port_cfg_t lvgl_cfg = {
+        .task_priority = 5,
+        .task_stack = 7168,
+        .task_affinity = 1,
+        .task_max_sleep_ms = 500,
+        .timer_period_ms = 5,
+    };
+    bsp_display_cfg_t cfg = {
+        .lvgl_port_cfg = lvgl_cfg,
+        .buffer_size = BSP_LCD_DRAW_BUFF_SIZE,
+        .double_buffer = BSP_LCD_DRAW_BUFF_DOUBLE,
+        .flags = {
+            .buff_dma = true,
+            .buff_spiram = false,
+            .sw_rotate = false,
+        }};
     bsp_display_start_with_config(&cfg);
     bsp_display_backlight_on();
     bsp_display_brightness_set(100);
@@ -24,38 +30,43 @@ static void lvglInit() {
 }
 
 static QueueHandle_t can_queue;
-using can_data_t = struct {
-    uint16_t rpm_value;
-    uint8_t speed_value;
-    uint8_t fuel_value;
-    uint16_t temp_value;
-};
 
 extern "C" void can_task(void * /*task_param*/) {
     CanConnect CAN;
-    static can_data_t can_data;
+    // struct defined in CanConnect.hpp
+    can_data_t can_data{0, 0, 0, 0};
+    can_data_t can_data_last{0, 0, 0, 0};
+    static char statBuffer[1024];
 
     while (true) {
         if (!CAN.ReceiveFrame()) {
+            vTaskGetRunTimeStats(statBuffer);
+            ESP_LOGI("Stats", "\n%s", statBuffer);
             continue; // Cancel the rest
         }
 
-        if (auto val = CAN.HandleRPM()) {
+        if (uint16_t val = CAN.HandleRPM(); can_data.rpm_value != val) {
             can_data.rpm_value = val;
         }
-        if (auto value = CAN.HandleSpeed()) {
-            can_data.speed_value = value;
+        if (uint8_t val = CAN.HandleSpeed(); can_data.speed_value != val) {
+            can_data.speed_value = val;
         }
-        if (auto value = CAN.HandleFuel()) {
-            can_data.fuel_value = value;
+        if (uint8_t val = CAN.HandleFuel(); can_data.fuel_value != val) {
+            can_data.fuel_value = val;
         }
-        if (auto value = CAN.HandleTemp()) {
-            can_data.temp_value = value;
+        if (uint8_t val = CAN.HandleTemp(); can_data.temp_value != val) {
+            can_data.temp_value = val;
         }
-        xQueueOverwrite(can_queue, &can_data);
+        if (can_data_last != can_data) {
+            xQueueOverwrite(can_queue, &can_data);
+            can_data_last = can_data;
+        }
 
         //Every x ms the queue is overwritten with new data
-        vTaskDelay(pdMS_TO_TICKS(5)); // x ms delay keeps scheduler happy
+
+        // vTaskGetRunTimeStats(statBuffer);
+        // ESP_LOGI("Stats", "\n%s", statBuffer);
+        vTaskDelay(pdMS_TO_TICKS(500)); // x ms delay keeps scheduler happy
     }
 }
 
@@ -74,8 +85,8 @@ extern "C" void ui_task(void * /*task_param*/) {
 
     while (true) {
         // dashboard.HideOnTouch();
-        if (xQueueReceive(can_queue, &can_data, pdMS_TO_TICKS(50)) == pdTRUE) {
-            bsp_display_lock(0);
+        if (xQueueReceive(can_queue, &can_data, pdMS_TO_TICKS(3000)) == pdTRUE) {
+            bsp_display_lock(1);
 
             dashboard.SetRPMValue(can_data.rpm_value);
             dashboard.SetSpeedValue(can_data.speed_value);
@@ -83,12 +94,11 @@ extern "C" void ui_task(void * /*task_param*/) {
             dashboard.SetTempValue(can_data.temp_value);
 
             bsp_display_unlock();
-        } else {
-            ESP_LOGE("UI FATAL", "Not receiving data from the Queue");
             vTaskDelay(pdMS_TO_TICKS(10));
+        } else {
+            ESP_LOGE("UI FATAL", "Queue is empty, no data being received from can_task");
             continue;
         }
-        vTaskDelay(pdMS_TO_TICKS(16));
     }
 }
 
